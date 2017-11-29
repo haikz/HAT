@@ -1,0 +1,334 @@
+OBJECT Page 50090 Edit Anything
+{
+  OBJECT-PROPERTIES
+  {
+    Date=20.09.17;
+    Time=20:26:36;
+    Modified=Yes;
+    Version List=;
+  }
+  PROPERTIES
+  {
+    Permissions=TableData 17=rm,
+                TableData 21=rm,
+                TableData 25=rm,
+                TableData 32=rm,
+                TableData 45=rm,
+                TableData 46=rm,
+                TableData 51=rm,
+                TableData 87=rm,
+                TableData 96=rm,
+                TableData 110=rm,
+                TableData 111=rm,
+                TableData 112=rm,
+                TableData 113=rm,
+                TableData 114=rm,
+                TableData 115=rm,
+                TableData 120=rm,
+                TableData 121=rm,
+                TableData 122=rm,
+                TableData 123=rm,
+                TableData 124=rm,
+                TableData 125=rm,
+                TableData 169=rm,
+                TableData 179=rm,
+                TableData 203=rm,
+                TableData 240=rm,
+                TableData 241=rm,
+                TableData 253=rm,
+                TableData 254=rm,
+                TableData 265=rm,
+                TableData 271=rm,
+                TableData 281=rm,
+                TableData 300=rm,
+                TableData 317=rm,
+                TableData 339=rm,
+                TableData 343=rm,
+                TableData 379=rm,
+                TableData 380=rm,
+                TableData 405=rm,
+                TableData 454=rm,
+                TableData 456=rm,
+                TableData 480=rm,
+                TableData 481=rm,
+                TableData 1511=rm,
+                TableData 1514=rm,
+                TableData 1525=rm,
+                TableData 1526=rm,
+                TableData 1530=rm,                
+                TableData 5617=rm,
+                TableData 5802=rm,
+                TableData 5804=rm,
+                TableData 5811=rm,
+                TableData 5832=rm,
+                TableData 5896=rm,
+                TableData 5907=rm,
+                TableData 5934=rm,
+                TableData 6508=rm,
+                TableData 6650=rm,
+                TableData 6651=rm,
+                TableData 6660=rm,
+                TableData 6661=rm,
+                TableData 7313=rm;
+    CaptionML=[ENU=Edit Anything;
+               ETI=K�igemuutja];
+    InsertAllowed=No;
+    DeleteAllowed=No;
+    LinksAllowed=No;
+    SourceTable=Table2000000041;
+    SourceTableView=WHERE(Class=CONST(Normal),
+                          Enabled=CONST(Yes));
+    PageType=List;
+    OnInit=BEGIN
+             ValidateTableNo(0);
+           END;
+
+    OnAfterGetRecord=VAR
+                       _FieldRef@1000000000 : FieldRef;
+                     BEGIN
+                       FieldValue := '';
+                       _FieldRef := CurrRecordRef.FIELD("No.");
+                       FieldValue := FORMAT(_FieldRef.VALUE);
+                     END;
+
+  }
+  CONTROLS
+  {
+    { 1000000000;0;Container;
+                ContainerType=ContentArea }
+
+    { 1000000010;1;Group  ;
+                GroupType=Group }
+
+    { 1000000008;2;Group  ;
+                GroupType=GridLayout;
+                Layout=Rows }
+
+    { 1000000009;3;Group  ;
+                GroupType=Group }
+
+    { 1000000011;4;Field  ;
+                CaptionML=[ENU=Table;
+                           ETI=Tabel];
+                BlankNumbers=BlankZero;
+                SourceExpr=CurrTableNo;
+                OnValidate=BEGIN
+                             ValidateTableNo(CurrTableNo);
+                           END;
+
+                OnLookup=VAR
+                           _AllObjWithCaption@1000000000 : Record 2000000058;
+                         BEGIN
+                           FilterAllTableObj(_AllObjWithCaption);
+                           IF PAGE.RUNMODAL(PAGE::"Table Objects",_AllObjWithCaption) = ACTION::LookupOK THEN
+                             ValidateTableNo(_AllObjWithCaption."Object ID");
+                         END;
+                          }
+
+    { 1000000016;4;Field  ;
+                SourceExpr=CurrTableDescrp;
+                Editable=FALSE;
+                ShowCaption=No }
+
+    { 1000000013;3;Group  ;
+                GroupType=Group }
+
+    { 1000000014;4;Field  ;
+                CaptionML=[ENU=Record;
+                           ETI=Kirje];
+                SourceExpr=CurrRecKey;
+                Editable=FALSE;
+                OnAssistEdit=VAR
+                               _Variant@1000000000 : Variant;
+                             BEGIN
+                               IF CurrTableNo = 0 THEN
+                                 EXIT;
+                               _Variant := CurrRecordRef;
+                               IF PAGE.RUNMODAL(0, _Variant) = ACTION::LookupOK THEN BEGIN
+                                 CurrRecordRef := _Variant;
+                                 CurrRecKey := FORMAT(CurrRecordRef.RECORDID);
+                                 FILTERGROUP(2);
+                                 SETRANGE(TableNo, CurrTableNo);
+                                 CurrPage.UPDATE(FALSE);
+                               END;
+                             END;
+                              }
+
+    { 1000000017;4;Field  ;
+                CaptionML=[ENU=Superman mode;
+                           ETI=Superman mode];
+                SourceExpr=SkipValidation }
+
+    { 1000000001;1;Group  ;
+                Name=Group;
+                GroupType=Repeater }
+
+    { 1000000003;2;Field  ;
+                SourceExpr="No.";
+                Editable=FALSE }
+
+    { 1000000005;2;Field  ;
+                SourceExpr=FieldName;
+                Editable=FALSE }
+
+    { 1000000002;2;Field  ;
+                SourceExpr="Field Caption";
+                Editable=FALSE }
+
+    { 1000000004;2;Field  ;
+                CaptionML=[ENU=Value;
+                           ETI=V��rtus];
+                SourceExpr=FieldValue;
+                Style=Strong;
+                StyleExpr=TRUE;
+                OnValidate=VAR
+                             _Text_No@1000000001 : TextConst 'ENU=No;ETI=Ei';
+                           BEGIN
+                             FieldValidate();
+                           END;
+
+                OnAssistEdit=VAR
+                               _RecordRef@1000000001 : RecordRef;
+                               _KeyRef@1000000004 : KeyRef;
+                               _FieldRef@1000000003 : FieldRef;
+                               _Variant@1000000002 : Variant;
+                               _Selected@1000000000 : Integer;
+                               _Text_YesNo@1000000005 : TextConst 'ENU=No,Yes;ETI=Ei,Jah';
+                             BEGIN
+                               IF Type = Type::Option THEN BEGIN
+                                 IF OptionString = '' THEN
+                                   EXIT;
+                                 _Selected := STRMENU(OptionString);
+                                 IF _Selected > 0 THEN BEGIN
+                                   FieldValue := FORMAT(_Selected-1);
+                                   FieldValidate();
+                                 END;
+                               END ELSE IF Type = Type::Boolean THEN BEGIN
+                                 //_Text_YesNo
+                               END ELSE IF RelationTableNo <> 0 THEN BEGIN
+                                 _RecordRef.OPEN(RelationTableNo);
+                                 _Variant := _RecordRef;
+                                 IF PAGE.RUNMODAL(0,_Variant) = ACTION::LookupOK THEN BEGIN
+                                   _RecordRef.GETTABLE(_Variant);
+                                   IF RelationFieldNo = 0 THEN BEGIN
+                                     _KeyRef := _RecordRef.KEYINDEX(1);
+                                     _FieldRef := _KeyRef.FIELDINDEX(1);
+                                   END ELSE
+                                     _FieldRef := _RecordRef.FIELD(RelationFieldNo);
+                                   FieldValue := FORMAT(_FieldRef.VALUE);
+                                   FieldValidate();
+                                 END;
+                               END;
+                             END;
+                              }
+
+    { 1000000006;2;Field  ;
+                SourceExpr=Type;
+                Editable=FALSE }
+
+    { 1000000007;2;Field  ;
+                SourceExpr=Len;
+                Editable=FALSE }
+
+    { 1000000015;2;Field  ;
+                SourceExpr=OptionString;
+                Editable=FALSE }
+
+    { 1000000012;2;Field  ;
+                SourceExpr=RelationTableNo;
+                Visible=FALSE;
+                Editable=FALSE }
+
+  }
+  CODE
+  {
+    VAR
+      CurrRecordRef@1000000004 : RecordRef;
+      CurrTableNo@1000000001 : Integer;
+      FieldValue@1000000000 : Text;
+      CurrTableDescrp@1000000002 : Text;
+      CurrRecKey@1000000003 : Text[250];
+      SkipValidation@1000000005 : Boolean;
+
+    LOCAL PROCEDURE ValidateTableNo@1000000002(_NewTableNo@1000000000 : Integer);
+    VAR
+      _AllObjWithCaption@1000000001 : Record 2000000058;
+    BEGIN
+      CurrTableNo := _NewTableNo;
+      CurrTableDescrp := '';
+      CurrRecKey := '';
+      IF CurrTableNo <> 0 THEN BEGIN
+        FilterAllTableObj(_AllObjWithCaption);
+        _AllObjWithCaption.SETRANGE("Object ID", CurrTableNo);
+        _AllObjWithCaption.FINDFIRST;
+        CurrTableDescrp := _AllObjWithCaption."Object Caption";
+        IF CurrRecordRef.NUMBER <> 0 THEN
+          CurrRecordRef.CLOSE;
+        CurrRecordRef.OPEN(CurrTableNo);
+      END;
+      FILTERGROUP(2);
+      SETRANGE(TableNo, 0);
+      CurrPage.UPDATE(FALSE);
+    END;
+
+    LOCAL PROCEDURE FilterAllTableObj@1000000000(VAR _AllObjWithCaption@1000000000 : Record 2000000058);
+    BEGIN
+      _AllObjWithCaption.FILTERGROUP(2);
+      _AllObjWithCaption.SETRANGE("Object Type", _AllObjWithCaption."Object Type"::Table);
+      _AllObjWithCaption.SETFILTER("Object ID", '<%1', 99008535);
+      _AllObjWithCaption.SETFILTER("Object Name", '<>*Buffer*');
+      _AllObjWithCaption.FILTERGROUP(0);
+    END;
+
+    LOCAL PROCEDURE FieldValidate@1000000010();
+    VAR
+      _FieldRef@1000000000 : FieldRef;
+      _Int@1000000001 : Integer;
+      _DateTime@1000000002 : DateTime;
+    BEGIN
+      _FieldRef := CurrRecordRef.FIELD("No.");
+      IF FieldValue = '' THEN
+        CASE Type OF
+          Type::Decimal, Type::Integer, Type::Option: FieldValue := '0';
+          Type::Boolean: FieldValue := 'No';
+        END;
+      IF Type = Type::Option THEN BEGIN
+        IF NOT EVALUATE(_Int, FieldValue) THEN
+          ERROR('Option sisesta numbriga');
+      END ELSE IF Type = Type::DateTime THEN
+        EVALUATE(_DateTime, FieldValue);
+
+      IF SkipValidation THEN BEGIN
+        IF Type = Type::Boolean THEN
+          _FieldRef.VALUE(UPPERCASE(FieldValue) IN ['YES', 'JAH', 'TRUE', '1'])
+        ELSE IF Type = Type::DateTime THEN
+          _FieldRef.VALUE := _DateTime
+        ELSE
+          _FieldRef.VALUE(FieldValue);
+      END ELSE BEGIN
+        IF Type = Type::Boolean THEN
+          _FieldRef.VALIDATE(UPPERCASE(FieldValue) IN ['YES', 'JAH', 'TRUE', '1'])
+        ELSE IF Type = Type::DateTime THEN
+          _FieldRef.VALIDATE(_DateTime)
+        ELSE
+          _FieldRef.VALIDATE(FieldValue);
+      END;
+      CurrRecordRef.MODIFY(NOT SkipValidation);
+      CurrPage.UPDATE(FALSE);
+    END;
+
+    BEGIN
+    {
+      H�T Systems O�
+      ------------------------------------------------------------------------------------
+      Project: Atria
+      HT: Haikko Tuvi
+
+      No.  Date        Sign   Ref     Description
+      ------------------------------------------------------------------------------------
+      001  05.05.2017   HT            Created
+    }
+    END.
+  }
+}
+

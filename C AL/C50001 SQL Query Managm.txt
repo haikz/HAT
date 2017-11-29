@@ -1,0 +1,329 @@
+OBJECT Codeunit 50001 SQL Query Managment
+{
+  OBJECT-PROPERTIES
+  {
+    Date=14.09.17;
+    Time=14:12:52;
+    Modified=Yes;
+    Version List=HATEXP,R125,TV-198;
+  }
+  PROPERTIES
+  {
+    OnRun=VAR
+            ltrecInvBuf@1000000000 : TEMPORARY Record 307;
+            lrrRec@1000000001 : RecordRef;
+          BEGIN
+          END;
+
+  }
+  CODE
+  {
+    VAR
+      bConnected@1000000000 : Boolean;
+      adoConn@1000000002 : DotNet "'ADODB, Version=7.0.3300.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'.ADODB.Connection";
+      Initialized@1000000003 : Boolean;
+      tcErrNotInit@1000000004 : TextConst 'ENU=Connection not initialized.\Call "initialize" first.;ETI=šhendus pole seadistatud.;ENC=Connection not initialized.\Call "initialize" first.';
+      tcErrNotTemp@1000000005 : TextConst 'ENU=Record is not temporary;ETI=Tabel peab olema ajutine!;ENC=Record is not temporary';
+
+    PROCEDURE SetUpDefaultConn@50017();
+    VAR
+      _DbServerName@50001 : Text;
+      _DbName@50000 : Text;
+    BEGIN
+      GetDbNameServer(_DbServerName, _DbName);
+      SetUpConnection(_DbServerName, _DbName);
+    END;
+
+    PROCEDURE SetUpConnection@1000000004(_DbServerName@50001 : Text;_DbName@50000 : Text);
+    VAR
+      _ConnStr@1000000000 : TextConst 'ENC="Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=%1;Data Source=%2"';
+      _loCreator@1000000001 : DotNet "'ADODB, Version=7.0.3300.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'.ADODB.ConnectionClass";
+    BEGIN
+      IF Initialized THEN
+        CloseConnection();
+      adoConn :=  _loCreator.ConnectionClass();
+      adoConn.Open((STRSUBSTNO(_ConnStr, _DbName, _DbServerName)), '', '', 0);
+      Initialized := TRUE;
+    END;
+
+    PROCEDURE getRecordFromSQL@1000000002(_SQLQuery@1000000000 : Text;_RecRef@1000000002 : RecordRef;_MatchFieldByPos@1000000011 : Boolean;_AutoIncFieldNo@50005 : Integer);
+    VAR
+      _Recordset@1000000001 : DotNet "'ADODB, Version=7.0.3300.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'.ADODB.Recordset";
+      _AdoField@50002 : DotNet "'ADODB, Version=7.0.3300.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'.ADODB.Field";
+      _AdoFields@50010 : DotNet "'ADODB, Version=7.0.3300.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'.ADODB.Fields";
+      _FieldRef@50006 : FieldRef;
+      _ltxtDebug@50004 : Text[30];
+      _txtValue@50003 : Text[200];
+      _decValue@50009 : Decimal;
+      _dateTimeValue@50008 : DateTime;
+      _FieldRefIDs@1000000003 : ARRAY [40] OF Integer;
+      _lnRecCount@1000000018 : Integer;
+      _AdoFldIndex@50001 : Integer;
+      _AdoFldCount@50000 : Integer;
+      _EntryNo@50007 : Integer;
+    BEGIN
+      IF NOT _RecRef.ISTEMPORARY THEN
+        ERROR(tcErrNotTemp);
+
+      testInitialized;
+      SetCompany(_SQLQuery);
+      _Recordset := adoConn.Execute(_SQLQuery, _lnRecCount, 0);
+      _AdoFields := _Recordset.Fields;
+      _AdoFldCount := MapFields(_AdoFields, _FieldRefIDs,_RecRef,_MatchFieldByPos);
+
+      WHILE NOT _Recordset.EOF DO BEGIN
+        _RecRef.INIT;
+        FOR _AdoFldIndex := 1 TO _AdoFldCount DO BEGIN
+          IF _FieldRefIDs[_AdoFldIndex]<>0 THEN BEGIN
+            _FieldRef := _RecRef.FIELDINDEX(_FieldRefIDs[_AdoFldIndex]);
+            _AdoField := _AdoFields.Item(_AdoFldIndex-1);
+            _txtValue := FORMAT(_AdoField.Value);
+            CASE FORMAT(_FieldRef.TYPE) OF
+              'Code', 'Text':
+                _FieldRef.VALUE(_txtValue);
+              'Date':
+              BEGIN
+                _txtValue := FORMAT(_AdoField.Value,0,9);
+                EVALUATE(_dateTimeValue, _txtValue,9);
+                _FieldRef.VALUE(DT2DATE(_dateTimeValue));
+              END;
+              ELSE BEGIN
+                EVALUATE(_decValue, _txtValue);
+                _FieldRef.VALUE(_decValue);
+              END;
+            END; // case
+          END;
+        END;
+        IF _AutoIncFieldNo > 0 THEN BEGIN
+          _EntryNo += 1;
+          _FieldRef := _RecRef.FIELD(_AutoIncFieldNo);
+          _FieldRef.VALUE := _EntryNo;
+        END;
+        _RecRef.INSERT;
+        _Recordset.MoveNext;
+      END;
+    END;
+
+    PROCEDURE executSQL@1000000001(_SQLQuery@1000000000 : Text) _NoOFRowAffected : Integer;
+    BEGIN
+      testInitialized;
+      adoConn.Execute(_SQLQuery, _NoOFRowAffected, 0);
+    END;
+
+    PROCEDURE CloseConnection@50000();
+    BEGIN
+      IF Initialized THEN
+        adoConn.Close();
+      CLEARALL;
+    END;
+
+    PROCEDURE GetSqlFieldName@50006(_NavFieldName@50000 : Text) _SqlFieldName : Text;
+    BEGIN
+      _SqlFieldName := EscapeNavSymbols(_NavFieldName);
+      IF STRPOS(_SqlFieldName, ' ') > 0 THEN
+        _SqlFieldName := '['+_SqlFieldName+']';
+    END;
+
+    PROCEDURE getFieldSqlFilter@50001(_NavFilter@50000 : Text;_FieldName@50001 : Text;_DataType@50004 : 'Text,Numeric') _SqlFilter : Text;
+    VAR
+      _i@50002 : Integer;
+      _FilterParam@50003 : Text;
+      _PrevWasDot@50005 : Boolean;
+      _OperatorAdded@50006 : Boolean;
+      _isRange@50007 : Boolean;
+    BEGIN
+      _NavFilter := DELCHR(_NavFilter, '=', '()');
+      _FieldName := GetSqlFieldName(_FieldName);
+      _SqlFilter := ' '+_FieldName;
+
+      FOR _i := 1 TO STRLEN(_NavFilter) DO BEGIN
+        CASE _NavFilter[_i] OF
+          '<','>','=':
+            BEGIN
+              _SqlFilter += FORMAT(_NavFilter[_i]);
+              _OperatorAdded := TRUE;
+            END;
+          '|': _SqlFilter += GetNewFilterPart(_FilterParam, _OperatorAdded,'OR '+_FieldName ,_DataType);
+          '&': _SqlFilter += GetNewFilterPart(_FilterParam, _OperatorAdded,'AND '+_FieldName ,_DataType);
+          '.':
+            BEGIN
+              IF _PrevWasDot THEN BEGIN
+                _OperatorAdded := TRUE;
+                IF _FilterParam = '' THEN BEGIN
+                  _SqlFilter += '<=';
+                END ELSE BEGIN
+                  _isRange := _i < STRLEN(_NavFilter);
+                  IF _isRange THEN
+                    _isRange := NOT (FORMAT(_NavFilter[_i+1]) IN ['|', '&','(', ')']);
+                  IF _isRange THEN BEGIN
+                    _SqlFilter += ' BETWEEN ';
+                    _SqlFilter += GetNewFilterPart(_FilterParam, _OperatorAdded,' AND ' ,_DataType);
+                    _OperatorAdded := TRUE;
+                  END ELSE
+                    _SqlFilter += '>=';
+                END;
+                _PrevWasDot := FALSE;
+              END ELSE
+                _PrevWasDot := TRUE;
+            END;
+          ELSE BEGIN
+            IF _PrevWasDot THEN BEGIN
+              _FilterParam += '.';
+              _PrevWasDot := FALSE;
+            END;
+            _FilterParam += FORMAT(_NavFilter[_i]);
+          END;
+        END;
+      END;
+      _SqlFilter += GetNewFilterPart(_FilterParam, _OperatorAdded,'' ,_DataType);
+    END;
+
+    LOCAL PROCEDURE GetNewFilterPart@50023(VAR _FilterParam@50000 : Text;VAR _OperatorAdded@50001 : Boolean;_Condition@50003 : Text;_DataType@50002 : 'Text,Numeric') _filterPart : Text;
+    VAR
+      _LastSymbol@50004 : Text;
+    BEGIN
+      IF _FilterParam <> '' THEN BEGIN
+        IF _DataType = _DataType::Numeric THEN
+          _FilterParam := CONVERTSTR(_FilterParam, ',', '.');
+        _filterPart := ' ';
+        IF NOT _OperatorAdded THEN
+          _filterPart += '=';
+
+        IF _DataType = _DataType::Text THEN
+          IF STRPOS(_FilterParam, '*') > 0 THEN BEGIN  // SQL LIKE clause
+            _LastSymbol := FORMAT(_filterPart[STRLEN(_filterPart)]);
+            IF _LastSymbol = '=' THEN BEGIN
+              _filterPart := COPYSTR(_filterPart, 1, STRLEN(_filterPart)-1);
+              _filterPart += ' LIKE ';
+            END ELSE IF _LastSymbol = '>' THEN BEGIN
+              _filterPart := COPYSTR(_filterPart, 1, STRLEN(_filterPart)-2); //remove <>
+              _filterPart += ' NOT LIKE ';
+            END;
+            _FilterParam := CONVERTSTR(_FilterParam, '*','%');
+          END;
+        IF STRPOS(_FilterParam, '''') = 0 THEN
+          _FilterParam := ''''+_FilterParam+'''';
+        _filterPart += _FilterParam+' ' + _Condition ;
+        _FilterParam := '';
+        _OperatorAdded := FALSE;
+      END;
+    END;
+
+    PROCEDURE getSqlDateTime@50002(_NavdateTime@50000 : DateTime) _SqlDateTimeTxt : Text;
+    VAR
+      _date@50002 : Date;
+      _time@50001 : Time;
+    BEGIN
+      _date := DT2DATE(_NavdateTime);
+      _time := DT2TIME(_NavdateTime);
+      _SqlDateTimeTxt := FORMAT(_date, 0, 9)+ ' '+ FORMAT(_time, 0, '<Hours24>:<Minutes,2>:<Seconds,2>');
+    END;
+
+    PROCEDURE GetDbNameServer@1000000000(VAR _DbServerName@50000 : Text;VAR _DbName@50001 : Text);
+    VAR
+      _ActiveSession@1000000003 : Record 2000000110;
+      _ServerFile@1000000002 : DotNet "'mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089'.System.IO.File";
+      _XMLDoc@1000000001 : DotNet "'System.Xml, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089'.System.Xml.XmlDocument";
+      _XMLNode@1000000000 : DotNet "'System.Xml, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089'.System.Xml.XmlNode";
+      _DatabaseInstance@1000000005 : Text;
+    BEGIN
+      // Get databse name and server from settings file
+      _ActiveSession.SETRANGE("Session ID",SESSIONID);
+      _ActiveSession.FINDFIRST;
+      _DbName := _ActiveSession."Database Name";
+
+      _XMLDoc := _XMLDoc.XmlDocument;
+      IF _ServerFile.Exists(APPLICATIONPATH + 'Instances\' + _ActiveSession."Server Instance Name" + '\CustomSettings.config') THEN
+        _XMLDoc.Load(APPLICATIONPATH + 'Instances\' + _ActiveSession."Server Instance Name" + '\CustomSettings.config')
+      ELSE
+        _XMLDoc.Load(APPLICATIONPATH + 'CustomSettings.config');
+
+      _XMLNode := _XMLDoc.SelectSingleNode('//appSettings/add[@key=''DatabaseServer'']');
+      _DbServerName := _XMLNode.Attributes.Item(1).InnerText;
+      _XMLNode := _XMLDoc.SelectSingleNode('//appSettings/add[@key=''DatabaseInstance'']');
+      _DatabaseInstance := _XMLNode.Attributes.Item(1).InnerText;
+      CLEAR(_XMLDoc);
+
+      IF LOWERCASE(_DbServerName) = 'localhost' THEN
+        _DbServerName := '(local)'
+      ELSE IF _DatabaseInstance <> '' THEN
+        _DbServerName += '\' + _DatabaseInstance;
+    END;
+
+    LOCAL PROCEDURE SetCompany@50013(VAR _SQLQuery@50000 : Text);
+    VAR
+      _txtCompany@50002 : Text;
+      _lnCompanyPos@50001 : Integer;
+    BEGIN
+      // replaces $company$ with sql friendly comp name
+      _txtCompany := EscapeNavSymbols(COMPANYNAME);
+      _lnCompanyPos := STRPOS(_SQLQuery, '$company$');
+      REPEAT
+        IF _lnCompanyPos<>0 THEN BEGIN
+          _SQLQuery := DELSTR(_SQLQuery, _lnCompanyPos, 8);
+          _SQLQuery := INSSTR(_SQLQuery, _txtCompany, _lnCompanyPos);
+        END;//if
+        _lnCompanyPos := STRPOS(_SQLQuery, '$company$');
+      UNTIL _lnCompanyPos = 0;
+    END;
+
+    LOCAL PROCEDURE MapFields@50022(VAR _AdoFields@50006 : DotNet "'ADODB, Version=7.0.3300.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'.ADODB.Fields";VAR _FieldRefIDs@50000 : ARRAY [40] OF Integer;_RecRef@50001 : RecordRef;_MatchFieldByPos@50003 : Boolean) _AdoFldCount : Integer;
+    VAR
+      _AdoField@50002 : DotNet "'ADODB, Version=7.0.3300.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'.ADODB.Field";
+      _FieldRef@50010 : FieldRef;
+      _NavFldName@50009 : Text;
+      _AdoFldName@50008 : Text;
+      _AdoFldIndex@50007 : Integer;
+      _NavFldIndex@50005 : Integer;
+      _NavFldCount@50004 : Integer;
+    BEGIN
+      // map fields to underlying record object
+      _AdoFldCount := _AdoFields.Count;
+      _NavFldCount := _RecRef.FIELDCOUNT;
+      FOR _AdoFldIndex := 1 TO _AdoFldCount DO BEGIN
+        IF _MatchFieldByPos THEN
+          _FieldRefIDs[_AdoFldIndex] := _AdoFldIndex
+        ELSE BEGIN
+          _NavFldIndex := 1;
+          REPEAT
+            _FieldRef := _RecRef.FIELDINDEX(_NavFldIndex);
+            _NavFldName := UPPERCASE(EscapeNavSymbols(_FieldRef.NAME));
+            _AdoField := _AdoFields.Item(_AdoFldIndex-1);
+            _AdoFldName := UPPERCASE(_AdoField.Name);
+            IF (_AdoFldName = _NavFldName) OR
+               (_AdoFldName = UPPERCASE(_FieldRef.NAME))
+            THEN BEGIN
+              _FieldRefIDs[_AdoFldIndex] := _NavFldIndex;
+            END;//if
+            _NavFldIndex += 1;
+          UNTIL (_FieldRefIDs[_AdoFldIndex]<>0) OR (_NavFldIndex > _NavFldCount);
+        END;//if not match field by pos
+      END;//for fld index
+    END;
+
+    LOCAL PROCEDURE testInitialized@1000000006();
+    BEGIN
+      IF NOT Initialized THEN
+        ERROR(tcErrNotInit);
+    END;
+
+    LOCAL PROCEDURE EscapeNavSymbols@50003(_NavString@50000 : Text) : Text;
+    BEGIN
+      EXIT (CONVERTSTR(_NavString, '."\/''%][', '________'));
+    END;
+
+    BEGIN
+    {
+      HŽT Systems Oš
+      ------------------------------------------------------------------------------------
+      Project:
+      HT: Haikko Tuvi
+
+      No.  Date        Sign   Reference  Description
+      ------------------------------------------------------------------------------------
+      001  15.11.2016   HT    TFS7204     Created
+    }
+    END.
+  }
+}
+
