@@ -9,8 +9,8 @@ declare @sourcecompany varchar(max) = 'CRONUS International Ltd_'
 declare @sourcedb varchar(max) ='Demo Database NAV'
 declare @targetcompany varchar(max) = 'CRONUS International Ltd_'
 declare @targetdb varchar(max) = 'Demo Database NAV (10-0)'
-RETURN
 -- COMMENT THIS OUT! Disables not deliberately runs
+RETURN
 -- end initialize
 
 SET NOCOUNT ON;
