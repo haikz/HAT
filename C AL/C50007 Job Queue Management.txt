@@ -1,0 +1,90 @@
+OBJECT Codeunit 50007 Job Queue Management
+{
+  OBJECT-PROPERTIES
+  {
+    Date=29.11.17;
+    Time=16:40:15;
+    Modified=Yes;
+    Version List=R129,TV-225,TV-227;
+  }
+  PROPERTIES
+  {
+    TableNo=472;
+    OnRun=BEGIN
+            CASE SELECTSTR(1,"Parameter String") OF
+              'CHECKJOBQUEUE':  RunJobQueueCheck();
+              'CLEANLOG':       CleanLog();
+              ELSE
+                EXIT;
+            END;
+          END;
+
+  }
+  CODE
+  {
+    VAR
+      GLSetup@1000000000 : Record 98;
+      CompanyInfo@1000000001 : Record 79;
+
+    PROCEDURE RunJobQueueCheck@1000000003();
+    VAR
+      _JobQueueEntry@1000000000 : Record 472;
+    BEGIN
+      _JobQueueEntry.RESET;
+      _JobQueueEntry.SETRANGE(Status, _JobQueueEntry.Status::Error);
+      IF _JobQueueEntry.FINDSET THEN
+        REPEAT
+          //IF ReportQueueErrorByMail(_JobQueueEntry) THEN;
+          _JobQueueEntry.SetStatus(_JobQueueEntry.Status::Ready);
+        UNTIL _JobQueueEntry.NEXT = 0;
+    END;
+
+    [TryFunction]
+    LOCAL PROCEDURE ReportQueueErrorByMail@1000000005(_queue@1000000000 : Record 472);
+    VAR
+      _Mail@1000000001 : Codeunit 400;
+      _subject@1000000002 : Text[100];
+      _body@1000000003 : Text[1024];
+      Text000@1000000004 : TextConst 'ETI=Tärge t””j„rjekorra kandega %1.';
+      Text001@1000000005 : TextConst 'ETI=Veateade: %1';
+      _logEntry@1000000006 : Record 474;
+    BEGIN
+      _subject := STRSUBSTNO(Text000, _queue.Description);
+      _body := STRSUBSTNO(Text001, _queue.Description);
+      _logEntry.RESET;
+      _logEntry.SETRANGE(ID, _queue.ID);
+      _logEntry.SETRANGE(Status, _queue.Status);
+      IF _logEntry.FINDLAST THEN
+        _body := STRSUBSTNO(Text001, (_logEntry."Error Message" + _logEntry."Error Message 2" + _logEntry."Error Message 3" + _logEntry."Error Message 4"));
+      GLSetup.GET;
+      CompanyInfo.GET;
+
+      _Mail.CreateMessage('NAV JOB QUEUE', CompanyInfo."E-Mail",CompanyInfo."E-Mail", _subject, _body, TRUE);
+      _Mail.Send();
+    END;
+
+    PROCEDURE CleanLog@50003();
+    VAR
+      _logEntry@50000 : Record 474;
+    BEGIN
+      _logEntry.SETFILTER("End Date/Time", '..%1', CREATEDATETIME(CALCDATE('<-2M>', TODAY), 0T));
+      _logEntry.FILTERGROUP(10);
+      _logEntry.SETFILTER("End Date/Time", '<>%1', CREATEDATETIME(0D, 0T));
+      _logEntry.DELETEALL(TRUE);
+    END;
+
+    BEGIN
+    {
+      HŽT Systems Oš
+      ------------------------------------------------------------------------------------
+      Project: Tallinna Vesi
+      HT: Haikko Tuvi
+
+      No. Date        Sign  Reference Description
+      ------------------------------------------------------------------------------------
+      001 10.10.2017   HT   TV-225    Created
+    }
+    END.
+  }
+}
+
