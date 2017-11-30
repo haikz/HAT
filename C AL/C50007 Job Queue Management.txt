@@ -2,8 +2,8 @@ OBJECT Codeunit 50007 Job Queue Management
 {
   OBJECT-PROPERTIES
   {
-    Date=29.11.17;
-    Time=16:40:15;
+    Date=30.11.17;
+    Time=11:27:44;
     Modified=Yes;
     Version List=R129,TV-225,TV-227;
   }
@@ -12,8 +12,8 @@ OBJECT Codeunit 50007 Job Queue Management
     TableNo=472;
     OnRun=BEGIN
             CASE SELECTSTR(1,"Parameter String") OF
-              'CHECKJOBQUEUE':  RunJobQueueCheck();
-              'CLEANLOG':       CleanLog();
+              'CHECKJOBQUEUE':  RunJobQueueCheck(Rec);
+              'CLEANLOG':       CleanLog("Parameter String");
               ELSE
                 EXIT;
             END;
@@ -22,67 +22,189 @@ OBJECT Codeunit 50007 Job Queue Management
   }
   CODE
   {
-    VAR
-      GLSetup@1000000000 : Record 98;
-      CompanyInfo@1000000001 : Record 79;
 
-    PROCEDURE RunJobQueueCheck@1000000003();
+    LOCAL PROCEDURE RunJobQueueCheck@1000000003(_CurrJobQueueEntry@1000000001 : Record 472);
     VAR
       _JobQueueEntry@1000000000 : Record 472;
+      _logEntry@1000000002 : Record 474;
     BEGIN
       _JobQueueEntry.RESET;
       _JobQueueEntry.SETRANGE(Status, _JobQueueEntry.Status::Error);
-      IF _JobQueueEntry.FINDSET THEN
+      IF _JobQueueEntry.FINDSET() THEN
         REPEAT
-          //IF ReportQueueErrorByMail(_JobQueueEntry) THEN;
           _JobQueueEntry.SetStatus(_JobQueueEntry.Status::Ready);
+          COMMIT;
+          CLEARLASTERROR();
+          IF NOT ReportLogError(_JobQueueEntry, _logEntry.Status::Error) THEN BEGIN
+            _logEntry.SETRANGE(ID, _CurrJobQueueEntry.ID);
+            _logEntry.SETRANGE(Status, _logEntry.Status::"In Process");
+            IF _logEntry.FINDLAST THEN BEGIN
+              _logEntry.SetErrorMessage(GETLASTERRORTEXT());
+              _logEntry.MODIFY;
+              IF ReportLogError(_CurrJobQueueEntry, _logEntry.Status::"In Process") THEN;
+            END;
+          END;
         UNTIL _JobQueueEntry.NEXT = 0;
     END;
 
-    [TryFunction]
-    LOCAL PROCEDURE ReportQueueErrorByMail@1000000005(_queue@1000000000 : Record 472);
-    VAR
-      _Mail@1000000001 : Codeunit 400;
-      _subject@1000000002 : Text[100];
-      _body@1000000003 : Text[1024];
-      Text000@1000000004 : TextConst 'ETI=Tärge t””j„rjekorra kandega %1.';
-      Text001@1000000005 : TextConst 'ETI=Veateade: %1';
-      _logEntry@1000000006 : Record 474;
-    BEGIN
-      _subject := STRSUBSTNO(Text000, _queue.Description);
-      _body := STRSUBSTNO(Text001, _queue.Description);
-      _logEntry.RESET;
-      _logEntry.SETRANGE(ID, _queue.ID);
-      _logEntry.SETRANGE(Status, _queue.Status);
-      IF _logEntry.FINDLAST THEN
-        _body := STRSUBSTNO(Text001, (_logEntry."Error Message" + _logEntry."Error Message 2" + _logEntry."Error Message 3" + _logEntry."Error Message 4"));
-      GLSetup.GET;
-      CompanyInfo.GET;
-
-      _Mail.CreateMessage('NAV JOB QUEUE', CompanyInfo."E-Mail",CompanyInfo."E-Mail", _subject, _body, TRUE);
-      _Mail.Send();
-    END;
-
-    PROCEDURE CleanLog@50003();
+    LOCAL PROCEDURE CleanLog@50003(_ParamString@1000000000 : Text);
     VAR
       _logEntry@50000 : Record 474;
+      _NoDaysToKeep@1000000001 : Integer;
     BEGIN
-      _logEntry.SETFILTER("End Date/Time", '..%1', CREATEDATETIME(CALCDATE('<-2M>', TODAY), 0T));
+      _logEntry.SETFILTER("End Date/Time", '..%1', CREATEDATETIME(CALCDATE('<-3M>', TODAY), 0T)); // Default
+      IF TryToSelectText(_ParamString, 2, _ParamString) THEN
+        IF EVALUATE(_NoDaysToKeep, _ParamString) THEN
+          _logEntry.SETFILTER("End Date/Time", '..%1', CREATEDATETIME(TODAY-_NoDaysToKeep, 0T));
       _logEntry.FILTERGROUP(10);
-      _logEntry.SETFILTER("End Date/Time", '<>%1', CREATEDATETIME(0D, 0T));
+      _logEntry.SETFILTER("End Date/Time", '<>%1', CREATEDATETIME(0D, 0T)); // exclude still running
       _logEntry.DELETEALL(TRUE);
+    END;
+
+    [TryFunction]
+    LOCAL PROCEDURE ReportLogError@1000000001(_queue@1000000000 : Record 472;_LogStatus@1000000008 : 'Success,In Process,Error');
+    VAR
+      _logEntry@1000000001 : Record 474;
+      _User@1000000003 : Record 2000000120;
+      _CompanyInfo@1000000007 : Record 79;
+      _Mail@1000000005 : Codeunit 400;
+      _MailBody@1000000006 : Text[1024];
+      _NotifUsers@1000000002 : Text;
+      _SemicLoc@1000000004 : Integer;
+    BEGIN
+      // TODO customize for customer requirements
+      IF (_queue."Notifications Receivers"  = '') AND (_queue."E-mail Receivers" = '') THEN
+        EXIT;
+      _logEntry.SETRANGE(ID, _queue.ID);
+      _logEntry.SETRANGE(Status, _LogStatus);
+      _logEntry.SETRANGE("User Notidied At", 0DT);
+      IF NOT _logEntry.FINDLAST OR (_logEntry."Error Message" = '') THEN
+        EXIT;
+
+      GLOBALLANGUAGE(1061);
+      IF _queue."Notifications Receivers" <> '' THEN BEGIN
+        _NotifUsers := _queue."Notifications Receivers";
+        REPEAT
+          CLEAR(_User);
+          _NotifUsers := DELCHR(_NotifUsers, '<', ';');
+          _SemicLoc := STRPOS(_NotifUsers, ';');
+          IF _SemicLoc > 0 THEN BEGIN
+            _User."User Name" := COPYSTR(_NotifUsers, 1,_SemicLoc-1);
+            _NotifUsers := COPYSTR(_NotifUsers, _SemicLoc);
+          END ELSE
+            _User."User Name" := _NotifUsers;
+          _User.SETRANGE("User Name", _User."User Name");
+          IF _User.FINDFIRST THEN
+            SendNotification(_queue, _User."User Name", _queue.TABLECAPTION +': '+ _queue.Description, _logEntry.GetErrorMessage(), PAGE::"Job Queue Entry Card");
+        UNTIL STRPOS(_NotifUsers, ';') = 0;
+        _logEntry."User Notidied At" := CURRENTDATETIME;
+        _logEntry.MODIFY;
+      END;
+
+      IF _queue."E-mail Receivers" <> '' THEN BEGIN
+        _queue.SETRECFILTER;
+        _MailBody := '<!DOCTYPE html><head></head><body>';
+        _MailBody += STRSUBSTNO('<a href="%3">%1: %2</a>',_queue.TABLECAPTION, _queue.Description, GETURL(DEFAULTCLIENTTYPE,COMPANYNAME,OBJECTTYPE::Page,PAGE::"Job Queue Entry Card", _queue, TRUE));
+        _MailBody += STRSUBSTNO('</br>%1: %2', _logEntry.FIELDCAPTION("Start Date/Time"), _logEntry."Start Date/Time");
+        _MailBody += STRSUBSTNO('</br>%1: <strong>%2</strong>', _logEntry.FIELDCAPTION("Error Message"), _logEntry.GetErrorMessage());
+        _MailBody += STRSUBSTNO('</br> %1', COMPANYNAME);
+        _MailBody += '</body></html>';
+        _CompanyInfo.GET();
+        IF _CompanyInfo."E-Mail" = '' THEN
+          _CompanyInfo."E-Mail" := 'nav@nav.ee';
+        _Mail.CreateMessage(COMPANYNAME
+                            ,_CompanyInfo."E-Mail"
+                            ,_queue."E-mail Receivers"
+                            ,STRSUBSTNO('%1 tärge', _queue.Description)
+                            ,_MailBody
+                            ,TRUE);
+        _Mail.Send();
+        IF _logEntry."User Notidied At" = 0DT THEN BEGIN
+          _logEntry."User Notidied At" := CURRENTDATETIME;
+          _logEntry.MODIFY;
+        END;
+      END;
+    END;
+
+    [TryFunction]
+    PROCEDURE SendNotification@1000000000(_FromRec@1000000000 : Variant;_Receiver@1000000002 : Code[50];_Description@1000000008 : Text[250];_Message@1000000003 : Text;_LinkPageId@1000000007 : Integer);
+    VAR
+      _RecordLink@1000000006 : Record 2000000068;
+      _DataTypeManagement@1000000005 : Codeunit 701;
+      _RecordRef@1000000004 : RecordRef;
+      _Url@1000000001 : Text;
+    BEGIN
+      _DataTypeManagement.GetRecordRef(_FromRec, _RecordRef);
+      _RecordRef.SETRECFILTER;
+      _RecordLink."Link ID" := 0;
+      _RecordLink."Record ID" := _RecordRef.RECORDID;
+      _RecordLink.Description := _Description;
+      IF _LinkPageId > 0 THEN BEGIN
+        _Url := GETURL(DEFAULTCLIENTTYPE,COMPANYNAME,OBJECTTYPE::Page,_LinkPageId, _RecordRef, TRUE);
+        _RecordLink.URL1 := COPYSTR(_Url,1,MAXSTRLEN(_RecordLink.URL1));
+        IF STRLEN(_Url) > MAXSTRLEN(_RecordLink.URL1) THEN
+          _RecordLink.URL2 := COPYSTR(_Url,MAXSTRLEN(_RecordLink.URL1) + 1,MAXSTRLEN(_RecordLink.URL2));
+      END;
+      _RecordLink.Type := _RecordLink.Type::Note;
+      _RecordLink.Created := CURRENTDATETIME;
+      _RecordLink."User ID" := USERID;
+      _RecordLink.Company := COMPANYNAME;
+      _RecordLink.Notify := TRUE;
+      _RecordLink."To User ID" := _Receiver;
+      _RecordLink.TESTFIELD("To User ID");
+      SetNodificationText(_RecordLink, _Message);
+      _RecordLink.INSERT;
+    END;
+
+    LOCAL PROCEDURE SetNodificationText@1000000035(VAR _RecordLink@1000000000 : Record 2000000068;_Message@1000000007 : Text);
+    VAR
+      _SystemUTF8Encoder@1000000011 : DotNet "'mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089'.System.Text.UTF8Encoding";
+      _SystemByteArray@1000000010 : DotNet "'mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089'.System.Array";
+      _OStr@1000000009 : OutStream;
+      _s@1000000008 : Text;
+      _c1@1000000006 : Char;
+      _c2@1000000005 : Char;
+      _x@1000000004 : Integer;
+      _y@1000000003 : Integer;
+      _i@1000000002 : Integer;
+    BEGIN
+      _Message := COPYSTR(_Message, 1, 128);
+      _RecordLink.Note.CREATEOUTSTREAM(_OStr);
+      _SystemUTF8Encoder := _SystemUTF8Encoder.UTF8Encoding;
+      _SystemByteArray := _SystemUTF8Encoder.GetBytes(_Message);
+      _x := _SystemByteArray.Length DIV 128;
+      IF _x > 1 THEN
+        _y := _SystemByteArray.Length - 128 * (_x - 1)
+      ELSE
+        _y := _SystemByteArray.Length;
+      _c1 := _y;
+      _OStr.WRITE(_c1);
+      IF _x > 0 THEN BEGIN
+        _c2 := _x;
+        _OStr.WRITE(_c2);
+      END;
+      FOR _i := 0 TO _SystemByteArray.Length - 1 DO BEGIN
+        _c1 := _SystemByteArray.GetValue(_i);
+        _OStr.WRITE(_c1);
+      END;
+    END;
+
+    [TryFunction]
+    LOCAL PROCEDURE TryToSelectText@1000000004(_CommaSepString@1000000000 : Text;_Position@1000000001 : Integer;VAR _OutSelected@1000000002 : Text);
+    BEGIN
+      _OutSelected := SELECTSTR(_Position, _CommaSepString);
     END;
 
     BEGIN
     {
       HŽT Systems Oš
       ------------------------------------------------------------------------------------
-      Project: Tallinna Vesi
+      Project: Atria
       HT: Haikko Tuvi
 
       No. Date        Sign  Reference Description
       ------------------------------------------------------------------------------------
-      001 10.10.2017   HT   TV-225    Created
+      001 29.11.2017   HT   AE-75     Created
     }
     END.
   }
