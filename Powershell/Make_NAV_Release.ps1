@@ -50,12 +50,12 @@ Import-NAVServerLicense $liveNavinstance -LicenseFile "$workFolder\HAT_Licence.f
 if ($i -gt 50)
 {
     # too many objects, use range filter
-    Write-Output "$lowestObjectNo .. $highestObjNo" 
+    Write-Verbose "$lowestObjectNo .. $highestObjNo" -Verbose 
     cmd /c """""${env:ProgramFiles(x86)}\Microsoft Dynamics NAV\90\RoleTailored Client\finsql.exe"" command=exportobjects,servername=$ServerName,database=$LiveDb,file=TEST.txt,filter=ID=$lowestObjectNo..$highestObjNo"""  #,logfile=log.txt
 }
 else
 {
-    Write-Output $separateFilter    
+    Write-Verbose $separateFilter -Verbose
     cmd /c """""${env:ProgramFiles(x86)}\Microsoft Dynamics NAV\90\RoleTailored Client\finsql.exe"" command=exportobjects,servername=$ServerName,database=$LiveDb,file=TEST.txt,filter=ID=""$separateFilter"""""  #,logfile=log.txt
 }
 Import-NAVServerLicense $liveNavinstance -LicenseFile "$workFolder\Cust_licence.flf"
