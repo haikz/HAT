@@ -2,8 +2,8 @@ OBJECT Page 50090 Edit Anything
 {
   OBJECT-PROPERTIES
   {
-    Date=20.09.17;
-    Time=20:26:36;
+    Date=13.12.17;
+    Time=[ 9:46:13];
     Modified=Yes;
     Version List=;
   }
@@ -55,7 +55,7 @@ OBJECT Page 50090 Edit Anything
                 TableData 1514=rm,
                 TableData 1525=rm,
                 TableData 1526=rm,
-                TableData 1530=rm,                
+                TableData 1530=rm,
                 TableData 5617=rm,
                 TableData 5802=rm,
                 TableData 5804=rm,
@@ -71,7 +71,7 @@ OBJECT Page 50090 Edit Anything
                 TableData 6661=rm,
                 TableData 7313=rm;
     CaptionML=[ENU=Edit Anything;
-               ETI=Kï¿½igemuutja];
+               ETI=Käigemuutja];
     InsertAllowed=No;
     DeleteAllowed=No;
     LinksAllowed=No;
@@ -144,24 +144,30 @@ OBJECT Page 50090 Edit Anything
                                IF CurrTableNo = 0 THEN
                                  EXIT;
                                _Variant := CurrRecordRef;
-                               IF PAGE.RUNMODAL(0, _Variant) = ACTION::LookupOK THEN BEGIN
-                                 CurrRecordRef := _Variant;
-                                 CurrRecKey := FORMAT(CurrRecordRef.RECORDID);
-                                 FILTERGROUP(2);
-                                 SETRANGE(TableNo, CurrTableNo);
-                                 CurrPage.UPDATE(FALSE);
-                               END;
+                               IF PAGE.RUNMODAL(0, _Variant) = ACTION::LookupOK THEN
+                                 SetCurrRecord(_Variant);
                              END;
                               }
 
     { 1000000017;4;Field  ;
                 CaptionML=[ENU=Superman mode;
                            ETI=Superman mode];
-                SourceExpr=SkipValidation }
+                SourceExpr=SkipValidation;
+                OnValidate=BEGIN
+                             IF SkipValidation THEN
+                               IF NOT CONFIRM(Confirm_NoValidation, TRUE) THEN
+                                 ERROR('');
+                           END;
+                            }
 
     { 1000000001;1;Group  ;
                 Name=Group;
                 GroupType=Repeater }
+
+    { 50000;2  ;Field     ;
+                Name=No. + Name;
+                SourceExpr=STRSUBSTNO('%1 - %2',"No.", FieldName);
+                Editable=FALSE }
 
     { 1000000003;2;Field  ;
                 SourceExpr="No.";
@@ -176,8 +182,7 @@ OBJECT Page 50090 Edit Anything
                 Editable=FALSE }
 
     { 1000000004;2;Field  ;
-                CaptionML=[ENU=Value;
-                           ETI=Vï¿½ï¿½rtus];
+                CaptionML=ENU=Value;
                 SourceExpr=FieldValue;
                 Style=Strong;
                 StyleExpr=TRUE;
@@ -249,6 +254,7 @@ OBJECT Page 50090 Edit Anything
       CurrTableDescrp@1000000002 : Text;
       CurrRecKey@1000000003 : Text[250];
       SkipValidation@1000000005 : Boolean;
+      Confirm_NoValidation@50000 : TextConst 'ENU=No validation on field change, continue?;ETI=Muudatusi ei valideerita, j„tkame?';
 
     LOCAL PROCEDURE ValidateTableNo@1000000002(_NewTableNo@1000000000 : Integer);
     VAR
@@ -265,6 +271,10 @@ OBJECT Page 50090 Edit Anything
         IF CurrRecordRef.NUMBER <> 0 THEN
           CurrRecordRef.CLOSE;
         CurrRecordRef.OPEN(CurrTableNo);
+        IF CurrRecordRef.FINDLAST THEN BEGIN
+          SetCurrRecord(CurrRecordRef);
+          EXIT;
+        END;
       END;
       FILTERGROUP(2);
       SETRANGE(TableNo, 0);
@@ -300,14 +310,14 @@ OBJECT Page 50090 Edit Anything
 
       IF SkipValidation THEN BEGIN
         IF Type = Type::Boolean THEN
-          _FieldRef.VALUE(UPPERCASE(FieldValue) IN ['YES', 'JAH', 'TRUE', '1'])
+          _FieldRef.VALUE(TextToBool(FieldValue))
         ELSE IF Type = Type::DateTime THEN
           _FieldRef.VALUE := _DateTime
         ELSE
           _FieldRef.VALUE(FieldValue);
       END ELSE BEGIN
         IF Type = Type::Boolean THEN
-          _FieldRef.VALIDATE(UPPERCASE(FieldValue) IN ['YES', 'JAH', 'TRUE', '1'])
+          _FieldRef.VALIDATE(TextToBool(FieldValue))
         ELSE IF Type = Type::DateTime THEN
           _FieldRef.VALIDATE(_DateTime)
         ELSE
@@ -317,11 +327,27 @@ OBJECT Page 50090 Edit Anything
       CurrPage.UPDATE(FALSE);
     END;
 
+    LOCAL PROCEDURE SetCurrRecord@50000(_Variant@50000 : Variant);
+    VAR
+      _DataTypeManagement@50001 : Codeunit 701;
+    BEGIN
+      _DataTypeManagement.GetRecordRef(_Variant, CurrRecordRef);
+      CurrRecKey := FORMAT(CurrRecordRef.RECORDID);
+      FILTERGROUP(2);
+      SETRANGE(TableNo, CurrTableNo);
+      CurrPage.UPDATE(FALSE);
+    END;
+
+    LOCAL PROCEDURE TextToBool@50002(_Text@50000 : Text) : Boolean;
+    BEGIN
+      EXIT (UPPERCASE(_Text) IN ['YES', 'JAH', 'TRUE', '1']);
+    END;
+
     BEGIN
     {
-      Hï¿½T Systems Oï¿½
+      HAT Systems OY
       ------------------------------------------------------------------------------------
-      Project: Atria
+      Project:
       HT: Haikko Tuvi
 
       No.  Date        Sign   Ref     Description
