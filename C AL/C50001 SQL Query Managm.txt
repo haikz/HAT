@@ -2,10 +2,10 @@ OBJECT Codeunit 50001 SQL Query Managment
 {
   OBJECT-PROPERTIES
   {
-    Date=14.09.17;
-    Time=14:12:52;
+    Date=03.01.18;
+    Time=14:49:15;
     Modified=Yes;
-    Version List=HATEXP,R125,TV-198;
+    Version List=HATEXP,R125,TV-198,TV-338;
   }
   PROPERTIES
   {
@@ -22,7 +22,7 @@ OBJECT Codeunit 50001 SQL Query Managment
       bConnected@1000000000 : Boolean;
       adoConn@1000000002 : DotNet "'ADODB, Version=7.0.3300.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'.ADODB.Connection";
       Initialized@1000000003 : Boolean;
-      tcErrNotInit@1000000004 : TextConst 'ENU=Connection not initialized.\Call "initialize" first.;ETI=šhendus pole seadistatud.;ENC=Connection not initialized.\Call "initialize" first.';
+      tcErrNotInit@1000000004 : TextConst 'ENU=Connection not initialized.\Call "initialize" first.;ETI=Âšhendus pole seadistatud.;ENC=Connection not initialized.\Call "initialize" first.';
       tcErrNotTemp@1000000005 : TextConst 'ENU=Record is not temporary;ETI=Tabel peab olema ajutine!;ENC=Record is not temporary';
 
     PROCEDURE SetUpDefaultConn@50017();
@@ -53,9 +53,6 @@ OBJECT Codeunit 50001 SQL Query Managment
       _AdoFields@50010 : DotNet "'ADODB, Version=7.0.3300.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'.ADODB.Fields";
       _FieldRef@50006 : FieldRef;
       _ltxtDebug@50004 : Text[30];
-      _txtValue@50003 : Text[200];
-      _decValue@50009 : Decimal;
-      _dateTimeValue@50008 : DateTime;
       _FieldRefIDs@1000000003 : ARRAY [40] OF Integer;
       _lnRecCount@1000000018 : Integer;
       _AdoFldIndex@50001 : Integer;
@@ -77,21 +74,7 @@ OBJECT Codeunit 50001 SQL Query Managment
           IF _FieldRefIDs[_AdoFldIndex]<>0 THEN BEGIN
             _FieldRef := _RecRef.FIELDINDEX(_FieldRefIDs[_AdoFldIndex]);
             _AdoField := _AdoFields.Item(_AdoFldIndex-1);
-            _txtValue := FORMAT(_AdoField.Value);
-            CASE FORMAT(_FieldRef.TYPE) OF
-              'Code', 'Text':
-                _FieldRef.VALUE(_txtValue);
-              'Date':
-              BEGIN
-                _txtValue := FORMAT(_AdoField.Value,0,9);
-                EVALUATE(_dateTimeValue, _txtValue,9);
-                _FieldRef.VALUE(DT2DATE(_dateTimeValue));
-              END;
-              ELSE BEGIN
-                EVALUATE(_decValue, _txtValue);
-                _FieldRef.VALUE(_decValue);
-              END;
-            END; // case
+            GetFieldRefValue(_AdoField, _FieldRef);
           END;
         END;
         IF _AutoIncFieldNo > 0 THEN BEGIN
@@ -102,6 +85,45 @@ OBJECT Codeunit 50001 SQL Query Managment
         _RecRef.INSERT;
         _Recordset.MoveNext;
       END;
+    END;
+
+    LOCAL PROCEDURE GetFieldRefValue@50008(VAR _AdoField@50001 : DotNet "'ADODB, Version=7.0.3300.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'.ADODB.Field";VAR _FieldRef@50000 : FieldRef);
+    VAR
+      _txtValue@50004 : Text[200];
+      _decValue@50003 : Decimal;
+      _dateTimeValue@50002 : DateTime;
+    BEGIN
+      IF ISNULL(_AdoField.Value) THEN
+        _txtValue := ''
+      ELSE
+        _txtValue := FORMAT(_AdoField.Value);
+
+      CASE FORMAT(_FieldRef.TYPE) OF
+        'Code', 'Text':
+          _FieldRef.VALUE(_txtValue);
+        'Date','DateTime','Time':
+          BEGIN
+            IF _txtValue <> '' THEN BEGIN
+              _txtValue := FORMAT(_AdoField.Value,0,9);
+              EVALUATE(_dateTimeValue, _txtValue,9);
+            END ELSE
+              _dateTimeValue := 0DT;
+            IF FORMAT(_FieldRef.TYPE) = 'Date' THEN
+              _FieldRef.VALUE(DT2DATE(_dateTimeValue))
+            ELSE IF FORMAT(_FieldRef.TYPE) = 'Time' THEN
+              _FieldRef.VALUE(DT2TIME(_dateTimeValue))
+            ELSE
+              _FieldRef.VALUE := _dateTimeValue;
+          END;
+        'Boolean':
+          _FieldRef.VALUE := UPPERCASE(_txtValue) IN ['1','TRUE','YES','JAH'];
+        ELSE BEGIN
+          _decValue := 0;
+          IF _txtValue <> '' THEN
+            EVALUATE(_decValue, _txtValue);
+          _FieldRef.VALUE(_decValue);
+        END;
+      END; // case
     END;
 
     PROCEDURE executSQL@1000000001(_SQLQuery@1000000000 : Text) _NoOFRowAffected : Integer;
@@ -314,7 +336,7 @@ OBJECT Codeunit 50001 SQL Query Managment
 
     BEGIN
     {
-      HŽT Systems Oš
+      HË‡T Systems OÂš
       ------------------------------------------------------------------------------------
       Project:
       HT: Haikko Tuvi
