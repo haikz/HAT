@@ -1,0 +1,99 @@
+OBJECT Codeunit 50007 Delete Dimension
+{
+  OBJECT-PROPERTIES
+  {
+    Date=18.01.18;
+    Time=16:48:21;
+    Modified=Yes;
+    Version List=;
+  }
+  PROPERTIES
+  {
+    Permissions=TableData 349=rd,
+                TableData 480=rd,
+                TableData 481=rd;
+    OnRun=BEGIN
+            CheckDelDimensionValue('TOODE', 'ULD EELVA');
+          END;
+
+  }
+  CODE
+  {
+    VAR
+      Error_IsUsedOnRec@1000000000 : TextConst 'ENU=Is used on record: \%1;ETI=On kasutuses kirjel: \%1';
+      Confirm_DelDimValue@1000000001 : TextConst 'ENU=Delete dimension %1 value %2?;ETI=Kustutame dimensiooni %1 v„„rtuse %2?';
+      Msg_Deleted@1000000002 : TextConst 'ENU=Deleted;ETI=Kustutatud';
+
+    PROCEDURE CheckDelDimensionValue@1000000010(_DimensionCode@1000000000 : Code[20];_DimValueCode@1000000001 : Code[20]);
+    VAR
+      _DimensionValue@1000000002 : Record 349;
+      _DimSetEntry@1000000003 : Record 480;
+      _RecordIdWhereUsed@1000000004 : Text;
+    BEGIN
+      IF NOT CONFIRM(Confirm_DelDimValue, FALSE,_DimensionCode, _DimValueCode) THEN
+        ERROR('');
+      _DimensionValue.GET(_DimensionCode, _DimValueCode);
+      _DimensionValue.TESTFIELD("Dimension Value ID");
+      _DimSetEntry.SETRANGE("Dimension Value ID", _DimensionValue."Dimension Value ID");
+      IF _DimSetEntry.FINDSET(TRUE) THEN
+        REPEAT
+          _RecordIdWhereUsed := CheckIfDimsSetIsUsed(_DimSetEntry."Dimension Set ID");
+          IF _RecordIdWhereUsed <> '' THEN
+            ERROR(Error_IsUsedOnRec, _RecordIdWhereUsed);
+        UNTIL _DimSetEntry.NEXT = 0;
+
+      IF _DimSetEntry.FINDSET(TRUE) THEN
+        REPEAT
+          DeleteTreeNodes(_DimSetEntry."Dimension Set ID");
+          _DimSetEntry.DELETE();
+        UNTIL _DimSetEntry.NEXT = 0;
+      _DimensionValue.DELETE(TRUE);
+      MESSAGE(Msg_Deleted);
+    END;
+
+    LOCAL PROCEDURE CheckIfDimsSetIsUsed@1000000007(_DimSetId@1000000003 : Integer) _RecordId : Text;
+    VAR
+      _Field@1000000000 : Record 2000000041;
+      _RecordRef@1000000001 : RecordRef;
+      _FieldRef@1000000002 : FieldRef;
+    BEGIN
+      _Field.SETRANGE(FieldName, 'Dimension Set ID');
+      _Field.SETRANGE(Type, _Field.Type::Integer);
+      _Field.SETRANGE(Class, _Field.Class::Normal);
+      _Field.SETFILTER(TableNo, '<>%1&<>%2',DATABASE::"Dimension Set Entry", DATABASE::"Dimension Set Tree Node");
+      IF _Field.FINDSET THEN
+        REPEAT
+          _RecordRef.OPEN(_Field.TableNo);
+          _FieldRef := _RecordRef.FIELD(_Field."No.");
+          _FieldRef.SETRANGE(_DimSetId);
+          IF _RecordRef.FINDFIRST THEN
+            EXIT(FORMAT(_RecordRef.RECORDID));
+          _RecordRef.CLOSE;
+        UNTIL _Field.NEXT = 0;
+    END;
+
+    LOCAL PROCEDURE DeleteTreeNodes@1000000015(_DimSetId@1000000000 : Integer);
+    VAR
+      _DimSetTreeNode@1000000001 : Record 481;
+      _DimSetTreeNodeChild@1000000002 : Record 481;
+    BEGIN
+      _DimSetTreeNode.SETRANGE("Dimension Set ID", _DimSetId);
+      _DimSetTreeNode.FINDFIRST;
+      _DimSetTreeNodeChild.SETRANGE("Parent Dimension Set ID", _DimSetId);
+      IF _DimSetTreeNodeChild.FINDSET THEN
+        REPEAT
+          DeleteTreeNodes(_DimSetTreeNodeChild."Dimension Set ID");
+        UNTIL _DimSetTreeNodeChild.NEXT = 0;
+      _DimSetTreeNode.DELETE;
+    END;
+
+    BEGIN
+    {
+      Deletes dimension value, even if dimension set entry exists
+      breaks with error if value is used somewhere, eg G/L entry
+      Alse deletes Dimension Set Tree Node and related subnotes
+    }
+    END.
+  }
+}
+
