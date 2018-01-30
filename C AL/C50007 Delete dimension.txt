@@ -2,18 +2,84 @@ OBJECT Codeunit 50007 Delete Dimension
 {
   OBJECT-PROPERTIES
   {
-    Date=18.01.18;
-    Time=16:48:21;
+    Date=30.01.18;
+    Time=12:24:25;
     Modified=Yes;
     Version List=;
   }
   PROPERTIES
   {
-    Permissions=TableData 349=rd,
-                TableData 480=rd,
-                TableData 481=rd;
+    Permissions=TableData 17=rm,
+                TableData 21=rm,
+                TableData 25=rm,
+                TableData 32=rm,
+                TableData 45=rm,
+                TableData 46=rm,
+                TableData 51=rm,
+                TableData 87=rm,
+                TableData 96=rm,
+                TableData 110=rm,
+                TableData 111=rm,
+                TableData 112=rm,
+                TableData 113=rm,
+                TableData 114=rm,
+                TableData 115=rm,
+                TableData 120=rm,
+                TableData 121=rm,
+                TableData 122=rm,
+                TableData 123=rm,
+                TableData 124=rm,
+                TableData 125=rm,
+                TableData 169=rm,
+                TableData 179=rm,
+                TableData 203=rm,
+                TableData 240=rm,
+                TableData 241=rm,
+                TableData 253=rm,
+                TableData 254=rm,
+                TableData 265=rm,
+                TableData 271=rm,
+                TableData 281=rm,
+                TableData 300=rm,
+                TableData 317=rm,
+                TableData 339=rm,
+                TableData 343=rm,
+                TableData 349=rmd,
+                TableData 379=rm,
+                TableData 380=rm,
+                TableData 405=rm,
+                TableData 454=rm,
+                TableData 456=rm,
+                TableData 480=rmd,
+                TableData 481=rmd,
+                TableData 1511=rm,
+                TableData 1514=rm,
+                TableData 1525=rm,
+                TableData 1526=rm,
+                TableData 1530=rm,
+                TableData 5601=rm,
+                TableData 5617=rm,
+                TableData 5802=rm,
+                TableData 5804=rm,
+                TableData 5811=rm,
+                TableData 5832=rm,
+                TableData 5896=rm,
+                TableData 5907=rm,
+                TableData 5934=rm,
+                TableData 6508=rm,
+                TableData 6650=rm,
+                TableData 6651=rm,
+                TableData 6660=rm,
+                TableData 6661=rm,
+                TableData 7313=rm;
     OnRun=BEGIN
-            CheckDelDimensionValue('TOODE', 'ULD EELVA');
+            LogFileUrl := STRSUBSTNO('C:\dynamics\Logs\DimMaint_%1_%2.txt', COMPANYNAME, FORMAT(CURRENTDATETIME,0,'<Year><Month,2><Day,2>_<Hours24><Minutes,2>')); // if empty no logging will occurr
+            //ReplaceUnderscoreDim();
+            //ReplaceUnderscoreGlobalDim();
+            //DeleteUnderscoreDimvalues();
+            DeleteUnderscoreDimvalues();
+            //CheckDelDimensionValue('TOODE', 'ULD EELVA');
+            MESSAGE('Completed \'+CONVERTSTR(LogFileUrl, '\', '/'));
           END;
 
   }
@@ -21,17 +87,91 @@ OBJECT Codeunit 50007 Delete Dimension
   {
     VAR
       Error_IsUsedOnRec@1000000000 : TextConst 'ENU=Is used on record: \%1;ETI=On kasutuses kirjel: \%1';
-      Confirm_DelDimValue@1000000001 : TextConst 'ENU=Delete dimension %1 value %2?;ETI=Kustutame dimensiooni %1 v„„rtuse %2?';
-      Msg_Deleted@1000000002 : TextConst 'ENU=Deleted;ETI=Kustutatud';
+      Confirm_DelDimValue@1000000001 : TextConst 'ENU=Delete dimension %1 value %2?;ETI=Kustutame dimensiooni %1 vï¿½ï¿½rtuse %2?';
+      Confirm_DimValWillBeReplaced@50000 : TextConst 'ENU=Dimension %1 value %2 will be replaced by dimension %3 value %4, continue?;ETI=Dimensiooni %1 vï¿½ï¿½rtus %2 asendatakse igal pool dimensiooni %3 vï¿½ï¿½rtusega %4, jï¿½tkame?';
+      LogFileUrl@50001 : Text;
+      LogFile@50002 : File;
 
-    PROCEDURE CheckDelDimensionValue@1000000010(_DimensionCode@1000000000 : Code[20];_DimValueCode@1000000001 : Code[20]);
+    LOCAL PROCEDURE ReplaceUnderscoreDim@50005();
+    VAR
+      _DimValue@50000 : Record 349;
+      _NewDimValue@50001 : Record 349;
+    BEGIN
+      IF NOT CONFIRM('Asendame kï¿½ik alakriipsuga dimensioonid?', FALSE) THEN
+        ERROR('');
+      CreateLogFile();
+      IF LogFileUrl <> '' THEN
+        LogFile.WRITE(STRSUBSTNO('%1%2%3%2%4', 'Old Set Id',GetTab(), 'New Set Id', 'Record'));
+
+      _DimValue.SETRANGE("Dimension Code",'RESSURSS');
+      _DimValue.SETFILTER(Code, '*_*');
+      _DimValue.FINDSET;
+      REPEAT
+        IF _NewDimValue.GET(_DimValue."Dimension Code", DELCHR(_DimValue.Code, '>', '_')) THEN
+          ReplaceDimension(_DimValue."Dimension Code", _DimValue.Code, _NewDimValue."Dimension Code", _NewDimValue.Code,FALSE);
+      UNTIL _DimValue.NEXT = 0;
+      IF LogFileUrl <> '' THEN
+        LogFile.CLOSE;
+    END;
+
+    LOCAL PROCEDURE ReplaceUnderscoreGlobalDim@50007();
+    VAR
+      _DimValue@50001 : Record 349;
+      _NewDimValue@50000 : Record 349;
+    BEGIN
+      // TV-361
+      IF NOT CONFIRM('Asendame kï¿½ik alakriipsuga dimensioonid?', FALSE) THEN
+        ERROR('');
+      CreateLogFile();
+      IF LogFileUrl <> '' THEN BEGIN
+        LogFile.WRITE('Globaaldim vï¿½ï¿½rtuste uuednamine');
+        LogFile.WRITE(STRSUBSTNO('%1%2%3%2%4', 'Old dim val',GetTab(), 'New Dim val', 'Record'));
+      END;
+
+      _DimValue.SETRANGE("Dimension Code",'RESSURSS');
+      _DimValue.SETFILTER(Code, '*_*');
+      _DimValue.FINDSET;
+      REPEAT
+        IF _NewDimValue.GET(_DimValue."Dimension Code", DELCHR(_DimValue.Code, '>', '_')) THEN
+          UpdateGlobalDimvalue(4,_DimValue.Code, _NewDimValue.Code);
+      UNTIL _DimValue.NEXT = 0;
+      IF LogFileUrl <> '' THEN
+        LogFile.CLOSE;
+    END;
+
+    LOCAL PROCEDURE DeleteUnderscoreDimvalues@50003();
+    VAR
+      _DimValue@50001 : Record 349;
+      _NewDimValue@50000 : Record 349;
+    BEGIN
+      // TV-361
+      IF NOT CONFIRM('Kustutame kï¿½ik alakriipsuga dimensioonid?', FALSE) THEN
+        ERROR('');
+      CreateLogFile();
+      IF LogFileUrl <> '' THEN
+        LogFile.WRITE('Dimensioonide kustutamine');
+
+      _DimValue.SETRANGE("Dimension Code",'RESSURSS');
+      _DimValue.SETFILTER(Code, '*_*');
+      _DimValue.FINDSET;
+      REPEAT
+        //IF _NewDimValue.GET(_DimValue."Dimension Code", DELCHR(_DimValue.Code, '>', '_')) THEN
+          CheckDelDimensionValue(_DimValue."Dimension Code", _DimValue.Code,FALSE);
+      UNTIL _DimValue.NEXT = 0;
+      IF LogFileUrl <> '' THEN
+        LogFile.CLOSE;
+    END;
+
+    PROCEDURE CheckDelDimensionValue@1000000010(_DimensionCode@1000000000 : Code[20];_DimValueCode@1000000001 : Code[20];_Confirm@50000 : Boolean);
     VAR
       _DimensionValue@1000000002 : Record 349;
       _DimSetEntry@1000000003 : Record 480;
       _RecordIdWhereUsed@1000000004 : Text;
     BEGIN
-      IF NOT CONFIRM(Confirm_DelDimValue, FALSE,_DimensionCode, _DimValueCode) THEN
-        ERROR('');
+      // TV-361
+      IF _Confirm THEN
+        IF NOT CONFIRM(Confirm_DelDimValue, FALSE,_DimensionCode, _DimValueCode) THEN
+          ERROR('');
       _DimensionValue.GET(_DimensionCode, _DimValueCode);
       _DimensionValue.TESTFIELD("Dimension Value ID");
       _DimSetEntry.SETRANGE("Dimension Value ID", _DimensionValue."Dimension Value ID");
@@ -47,8 +187,9 @@ OBJECT Codeunit 50007 Delete Dimension
           DeleteTreeNodes(_DimSetEntry."Dimension Set ID");
           _DimSetEntry.DELETE();
         UNTIL _DimSetEntry.NEXT = 0;
+      IF LogFileUrl <> '' THEN
+        LogFile.WRITE(_DimensionValue.RECORDID);
       _DimensionValue.DELETE(TRUE);
-      MESSAGE(Msg_Deleted);
     END;
 
     LOCAL PROCEDURE CheckIfDimsSetIsUsed@1000000007(_DimSetId@1000000003 : Integer) _RecordId : Text;
@@ -87,11 +228,120 @@ OBJECT Codeunit 50007 Delete Dimension
       _DimSetTreeNode.DELETE;
     END;
 
+    LOCAL PROCEDURE ReplaceDimension@50000(_DimCode@50001 : Code[20];_DimValueCode@50000 : Code[20];_NewDimCode@50003 : Code[20];_NewDimValueCode@50002 : Code[10];_Confirm@50014 : Boolean);
+    VAR
+      _DimensionValue@50005 : Record 349;
+      _NewDimValue@50012 : Record 349;
+      _DimSetEntry@50004 : Record 480;
+      _Field@50008 : Record 2000000041;
+      _TempDimSetEntry@50010 : TEMPORARY Record 480;
+      _DimMgt@50009 : Codeunit 408;
+      _RecordRef@50007 : RecordRef;
+      _FieldRef@50006 : FieldRef;
+      _NewDimSetId@50011 : Integer;
+      _NewDimValueBlocked@50013 : Boolean;
+    BEGIN
+      IF _Confirm THEN
+        IF NOT CONFIRM(Confirm_DimValWillBeReplaced, FALSE,_DimCode, _DimValueCode, _NewDimCode, _NewDimValueCode) THEN
+          ERROR('');
+      _DimensionValue.GET(_DimCode, _DimValueCode);
+      _DimensionValue.TESTFIELD("Dimension Value ID");
+      _NewDimValue.GET(_NewDimCode, _NewDimValueCode);
+      _NewDimValueBlocked := _NewDimValue.Blocked;
+      IF _NewDimValueBlocked THEN BEGIN
+        _NewDimValue.Blocked := FALSE;
+        _NewDimValue.MODIFY;
+      END;
+      _DimSetEntry.SETRANGE("Dimension Value ID", _DimensionValue."Dimension Value ID");
+
+      IF _DimSetEntry.FINDSET(TRUE) THEN BEGIN
+        IF NOT _TempDimSetEntry.ISTEMPORARY THEN
+          ERROR('Bad developer, bad');
+        _DimMgt.GetDimensionSet(_TempDimSetEntry, _DimSetEntry."Dimension Set ID");
+        _TempDimSetEntry.GET(_TempDimSetEntry."Dimension Set ID", _DimCode);
+        _TempDimSetEntry.DELETE(FALSE);
+        _TempDimSetEntry.VALIDATE("Dimension Code", _NewDimCode);
+        _TempDimSetEntry.VALIDATE("Dimension Value Code", _NewDimValueCode);
+        IF NOT _TempDimSetEntry.INSERT(TRUE) THEN
+          _TempDimSetEntry.MODIFY(TRUE);
+        _NewDimSetId := _DimMgt.GetDimensionSetID(_TempDimSetEntry);
+        REPEAT
+          _Field.SETRANGE(FieldName, 'Dimension Set ID');
+          _Field.SETRANGE(Type, _Field.Type::Integer);
+          _Field.SETRANGE(Class, _Field.Class::Normal);
+          _Field.SETFILTER(TableNo, '<>%1&<>%2',DATABASE::"Dimension Set Entry", DATABASE::"Dimension Set Tree Node");
+          IF _Field.FINDSET THEN
+            REPEAT
+              _RecordRef.OPEN(_Field.TableNo);
+              _FieldRef := _RecordRef.FIELD(_Field."No.");
+              _FieldRef.SETRANGE(_DimSetEntry."Dimension Set ID");
+              IF _RecordRef.FINDSET THEN
+                REPEAT
+                _FieldRef := _RecordRef.FIELD(_Field."No.");
+                IF LogFileUrl <> '' THEN
+                  LogFile.WRITE(STRSUBSTNO('%1%2%3%2%4', _FieldRef.VALUE,GetTab(), _NewDimSetId, _RecordRef.RECORDID));
+                _FieldRef.VALUE := _NewDimSetId; // TODO
+                _RecordRef.MODIFY;
+                UNTIL _RecordRef.NEXT = 0;
+              _RecordRef.CLOSE;
+            UNTIL _Field.NEXT = 0;
+        UNTIL _DimSetEntry.NEXT = 0;
+      END;
+
+      IF _NewDimValueBlocked THEN BEGIN
+        _NewDimValue.Blocked := TRUE;
+        _NewDimValue.MODIFY;
+      END;
+    END;
+
+    LOCAL PROCEDURE UpdateGlobalDimvalue@50002(_GlobalDimNo@50002 : Integer;_DimValueCode@50001 : Code[20];_NewDimValueCode@50000 : Code[20]);
+    VAR
+      _Field@50005 : Record 2000000041;
+      _RecordRef@50004 : RecordRef;
+      _FieldRef@50003 : FieldRef;
+    BEGIN
+      _Field.SETRANGE(FieldName, STRSUBSTNO('Global Dimension %1 Code', _GlobalDimNo));
+      _Field.SETRANGE(Type, _Field.Type::Code);
+      _Field.SETRANGE(Class, _Field.Class::Normal);
+      _Field.SETFILTER(TableNo, '<>%1&<>%2',DATABASE::"Dimension Set Entry", DATABASE::"Dimension Set Tree Node");
+      IF _Field.FINDSET THEN
+        REPEAT
+          _RecordRef.OPEN(_Field.TableNo);
+          _FieldRef := _RecordRef.FIELD(_Field."No.");
+          _FieldRef.SETRANGE(_DimValueCode);
+          IF _RecordRef.FINDSET(TRUE) THEN
+            REPEAT
+              _FieldRef := _RecordRef.FIELD(_Field."No.");
+              IF LogFileUrl <> '' THEN
+                LogFile.WRITE(STRSUBSTNO('%1%2%3%2%4', _FieldRef.VALUE,GetTab(), _NewDimValueCode, _RecordRef.RECORDID));
+              _FieldRef.VALUE := _NewDimValueCode;
+              _RecordRef.MODIFY;
+            UNTIL _RecordRef.NEXT = 0;
+          _RecordRef.CLOSE;
+        UNTIL _Field.NEXT = 0;
+    END;
+
+    LOCAL PROCEDURE GetTab@50004() : Text;
+    VAR
+      _Char@50000 : Char;
+    BEGIN
+      _Char := 9;
+      EXIT (FORMAT(_Char));
+    END;
+
+    LOCAL PROCEDURE CreateLogFile@50001();
+    BEGIN
+      IF LogFileUrl <> '' THEN BEGIN
+        LogFile.WRITEMODE(TRUE);
+        LogFile.TEXTMODE(TRUE);
+        LogFile.CREATE(LogFileUrl);
+      END;
+    END;
+
     BEGIN
     {
-      Deletes dimension value, even if dimension set entry exists
-      breaks with error if value is used somewhere, eg G/L entry
-      Alse deletes Dimension Set Tree Node and related subnotes
+      Helper functions for dimension deletion/replacment
+      Use at your own risk
     }
     END.
   }
